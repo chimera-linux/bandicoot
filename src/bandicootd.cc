@@ -267,6 +267,10 @@ static bool handle_dump(conn &nc, int fd) {
         }
         /* the rest is the path */
         nc.path = nc.meta.data() + sizeof(nc.entry);
+        /* it's nodump; do not save */
+        if (nc.entry.flags & ENTRY_FLAG_NODUMP) {
+            return false;
+        }
         /* initialize zstd stream */
         char buf[256];
         std::snprintf(
