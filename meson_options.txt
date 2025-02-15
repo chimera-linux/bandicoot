@@ -18,3 +18,10 @@ option(
     value: '/run/bandicoot.sock',
     description: 'The socket used for daemon communication',
 )
+
+option(
+    'sysctl-name',
+    type: 'string',
+    value: '10-bandicoot.conf',
+    description: 'The name to use for sysctl.d file',
+)

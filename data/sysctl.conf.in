@@ -1,0 +1,1 @@
+kernel.core_pattern = |@BANDICOOT_CLIENT@ %p %P %i %I %u %g %s %t %c %d %e %E

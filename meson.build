@@ -47,3 +47,22 @@ executable(
     install: true,
     install_dir: get_option('bindir'),
 )
+
+sysname = get_option('sysctl-name')
+
+if sysname != ''
+    syscdata = configuration_data()
+
+    clpath = get_option('prefix') / get_option('libexecdir') / 'bandicoot'
+    syscdata.set('BANDICOOT_CLIENT', clpath)
+
+    configure_file(
+        input: 'data/sysctl.conf.in',
+        output: sysname,
+        configuration: syscdata,
+        format: 'cmake@',
+        install: true,
+        install_dir: get_option('libdir') / 'sysctl.d',
+        install_mode: 'rwxr-xr-x',
+    )
+endif
