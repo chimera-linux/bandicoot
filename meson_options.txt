@@ -1,0 +1,20 @@
+option(
+    'crashdir',
+    type: 'string',
+    value: 'crash',
+    description: 'The crash directory, absolute or relative to localstatedir',
+)
+
+option(
+    'man',
+    type: 'feature',
+    value: 'auto',
+    description: 'Whether to build manpages',
+)
+
+option(
+    'socket-path',
+    type: 'string',
+    value: '/run/bandicoot.sock',
+    description: 'The socket used for daemon communication',
+)
