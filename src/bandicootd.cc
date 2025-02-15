@@ -7,7 +7,7 @@
  *
  * - '\xDDDUMP\0'
  * - 2 bytes containing metadata length (>0)
- * - metadata block as above (sequence of null-terminated strings KEY=VAL)
+ * - metadata block as above (struct dumpidx followed by path)
  * - loop:
  *   - chunk size (4 bytes) - last chunk size will be 0 (eof)
  *   - chunk data
@@ -110,11 +110,14 @@ struct zstream {
         return true;
     }
 
-    bool write_from(int fd, uint32_t &datalen) {
+    bool write_from(int fd, uint32_t &datalen, std::size_t &writelen, rlim_t limit) {
         void *ptr = inbuf.data();
-        auto wsize = read(
-            fd, ptr, (inbufsz > datalen) ? std::size_t(datalen) : inbufsz
-        );
+        auto space = (writelen < limit) ? (limit - writelen) : 0;
+        auto maxread = (inbufsz > datalen) ? std::size_t(datalen) : inbufsz;
+        if (maxread > space) {
+            maxread = space;
+        }
+        auto wsize = read(fd, ptr, maxread);
         if (wsize < 0) {
             if ((errno == EINTR) || (errno == EAGAIN) || (errno == EWOULDBLOCK)) {
                 /* try again later */
@@ -125,6 +128,7 @@ struct zstream {
         }
         /* shrink the remaining chunk */
         datalen -= wsize;
+        writelen += wsize;
         ZSTD_inBuffer inp{ptr, std::size_t(wsize), 0};
         std::size_t rem;
         do {
@@ -166,6 +170,7 @@ struct conn {
     uint32_t datagot = 0;
     int type = CONN_UNKNOWN;
     int fd = -1;
+    std::size_t writelen = 0;
     char const *path = nullptr;
     std::string meta;
     dumpidx entry;
@@ -304,7 +309,7 @@ static bool handle_dump(conn &nc, int fd) {
         }
         /* if it's 0, it means we have no more chunks */
         if (nc.datalen == 0) {
-            if (!nc.zs.write_from(fd, nc.datalen)) {
+            if (!nc.zs.write_from(fd, nc.datalen, nc.writelen, nc.entry.dumpsize)) {
                 nc.zs.release();
                 return false;
             }
@@ -332,10 +337,15 @@ static bool handle_dump(conn &nc, int fd) {
         }
     }
     /* reading a dump; XXX truncate when going over ulimit? */
-    auto ret = nc.zs.write_from(fd, nc.datalen);
+    auto ret = nc.zs.write_from(fd, nc.datalen, nc.writelen, nc.entry.dumpsize);
     /* exhausted the chunk, reset to get a new chunk */
     if (nc.datalen == 0) {
         nc.datagot = 0;
+    }
+    /* ran out of space, so it's truncated */
+    if (nc.writelen >= nc.entry.dumpsize) {
+        nc.entry.flags |= ENTRY_FLAG_TRUNCATED;
+        return false;
     }
     return ret;
 }
