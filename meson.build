@@ -33,16 +33,16 @@ executable(
 )
 
 executable(
-    'bandicoot',
-    'src/bandicoot.cc',
+    'bandicoot-dump',
+    'src/bandicoot-dump.cc',
     include_directories: inc,
     install: true,
     install_dir: get_option('libexecdir'),
 )
 
 executable(
-    'bandicore',
-    'src/bandicore.cc',
+    'bandicoot',
+    'src/bandicoot.cc',
     include_directories: inc,
     install: true,
     install_dir: get_option('bindir'),
@@ -53,7 +53,7 @@ sysname = get_option('sysctl-name')
 if sysname != ''
     syscdata = configuration_data()
 
-    clpath = get_option('prefix') / get_option('libexecdir') / 'bandicoot'
+    clpath = get_option('prefix') / get_option('libexecdir') / 'bandicoot-dump'
     syscdata.set('BANDICOOT_CLIENT', clpath)
 
     configure_file(

@@ -30,17 +30,17 @@ Additional dependencies required to build and run:
 The whole system consists of 3 processes:
 
 * `bandicootd`
+* `bandicoot-dump`
 * `bandicoot`
-* `bandicore`
 
 The first is a daemon that runs as a system service. It opens a listening
 TCP socket and accepts connections. When a connection is received, it expects
 to receive a specific message.
 
-* For connections from `bandicoot`, an identification message plus metadata
+* For connections from `bandicoot-dump`, an identification message plus metadata
   is received, followed by a stream representing a core dump. This type of
   message is only allowed from superuser connections (peer credentials are
   verified).
-* For connections from `bandicore`, a different protocol is followed. Any
+* For connections from `bandicoot`, a different protocol is followed. Any
   user can send these messages but it will only receive information it has
   permissions for.
