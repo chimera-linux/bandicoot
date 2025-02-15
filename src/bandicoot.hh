@@ -15,7 +15,7 @@
 
 /* version of dumpidx for future backwards compat changes */
 enum {
-    ENTRY_V1 = 0,
+    ENTRY_V1 = 1,
 };
 
 enum {
@@ -24,6 +24,7 @@ enum {
 };
 
 struct dumpidx {
+    uint32_t version = ENTRY_V1;
     pid_t pid = 0, ipid = 0, tid = 0, itid = 0;
     uid_t uid = uid_t(-1);
     gid_t gid = gid_t(-1);

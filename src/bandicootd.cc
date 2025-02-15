@@ -175,6 +175,22 @@ struct conn {
     std::string meta;
     dumpidx entry;
     zstream zs;
+
+    void finish() {
+        zs.release();
+        for (;;) {
+            auto ws = write(crash_ifd, meta.data(), meta.size());
+            if (ws < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                warn("failed to write index");
+            } else if (ws == 0) {
+                warnx("unexpected EOF for index");
+            }
+            break;
+        }
+    }
 };
 
 /* event loop fds */
@@ -264,6 +280,15 @@ static bool handle_dump(conn &nc, int fd) {
     }
     /* fill the index structure if we haven't yet */
     if (!nc.entry.pid) {
+        std::uint32_t mver;
+        std::memcpy(&mver, nc.meta.data(), sizeof(mver));
+        switch (mver) {
+            case ENTRY_V1:
+                break;
+            default:
+                warnx("bandicootd: received invalid metadata ver for %d", fd);
+                return false;
+        }
         std::memcpy(&nc.entry, nc.meta.data(), sizeof(nc.entry));
         auto remlen = nc.meta.size() - sizeof(nc.entry);
         if ((remlen != nc.entry.pathlen) || !nc.entry.pid) {
@@ -329,10 +354,10 @@ static bool handle_dump(conn &nc, int fd) {
         /* if it's 0, it means we have no more chunks */
         if (nc.datalen == 0) {
             if (!nc.zs.write_from(fd, nc.datalen, nc.writelen, nc.entry.dumpsize)) {
-                nc.zs.release();
+                nc.finish();
                 return false;
             }
-            nc.zs.release();
+            nc.finish();
             /* send a terminating message back to the client */
             unsigned char msg = 0xDD;
             for (;;) {
