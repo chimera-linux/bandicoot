@@ -276,12 +276,31 @@ static bool handle_dump(conn &nc, int fd) {
         if (nc.entry.flags & ENTRY_FLAG_NODUMP) {
             return false;
         }
-        /* initialize zstd stream */
-        char buf[256];
+        /* disabled via resource limit */
+        if (nc.entry.dumpsize <= 0) {
+            return false;
+        }
+        /* initialize zstd stream; first make up the file name */
+        constexpr auto maxfn = 255;
+        char buf[maxfn + 1];
         std::snprintf(
-            buf, sizeof(buf), "core.%s.%u.%u.zst", nc.entry.comm,
+            buf, sizeof(buf), "core.%s.%u.%u", nc.entry.comm,
             unsigned(nc.entry.pid), unsigned(nc.entry.uid)
         );
+        auto flen = std::strlen(buf);
+        auto plen = nc.path ? std::strlen(nc.path) : 0;
+        auto *eptr = &buf[flen];
+        /* total space minus what we already need minus .zst + extra . */
+        auto espace = maxfn - flen - 5;
+        if (espace > plen) {
+            espace = plen;
+        }
+        if (espace) {
+            *eptr++ = '.';
+            memcpy(eptr, nc.path, espace);
+            eptr += espace;
+        }
+        memcpy(eptr, ".zst", 5);
         if (!nc.zs.open(buf, nc.entry.uid, nc.entry.gid)) {
             return false;
         }

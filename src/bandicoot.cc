@@ -19,6 +19,7 @@
 #include <err.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/resource.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 
@@ -44,7 +45,8 @@ int main() {
     testdata.signum = 11;
     testdata.pathlen = sizeof("usr!bin!firefox") - 1;
     testdata.epoch = 10000000;
-    testdata.flags = ENTRY_FLAG_NODUMP;
+    testdata.flags = 0;
+    testdata.dumpsize = RLIM_INFINITY;
     memset(testdata.comm, 0, sizeof(testdata.comm));
     memcpy(testdata.comm, "firefox", sizeof("firefox"));
 
