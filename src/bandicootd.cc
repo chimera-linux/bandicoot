@@ -33,6 +33,7 @@
 #include <err.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <sched.h>
 #include <signal.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -55,6 +56,8 @@ static int ctl_sock = -1;
 static int crash_dfd = -1;
 /* file descriptor for crash_dfd/index.bin */
 static int crash_ifd = -1;
+/* number of threads to use for zstd */
+static int zstd_threads = 0;
 
 struct zstream {
     std::vector<unsigned char> inbuf;
@@ -98,7 +101,12 @@ struct zstream {
             warnx("bandicootd: failed to set zstd checksum flag");
             return false;
         }
-        /* TODO threads */
+        /* we already pre-sanitized the count */
+        errc = ZSTD_CCtx_setParameter(ctx, ZSTD_c_nbWorkers, zstd_threads);
+        if (ZSTD_isError(errc)) {
+            warnx("bandicootd: failed to set zstd thread count, using default");
+            /* not an error, as it's not crucial */
+        }
         return true;
     }
 
@@ -362,6 +370,23 @@ int main() {
 
     fds.reserve(16);
     conns.reserve(16);
+
+    {
+        cpu_set_t cset;
+        sched_getaffinity(0, sizeof(cset), &cset);
+        zstd_threads = CPU_COUNT(&cset);
+        /* above 6 threads it does not really matter */
+        if (zstd_threads > 6) {
+            zstd_threads = 6;
+        }
+        /* adjust according to what this libzstd build permits */
+        auto bounds = ZSTD_cParam_getBounds(ZSTD_c_nbWorkers);
+        if (zstd_threads < bounds.lowerBound) {
+            zstd_threads = bounds.lowerBound;
+        } else if (zstd_threads > bounds.upperBound) {
+            zstd_threads = bounds.upperBound;
+        }
+    }
 
     std::printf("bandicootd: directory setup\n");
 
