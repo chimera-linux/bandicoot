@@ -1,7 +1,5 @@
 /* The control daemon. It accepts connections on its socket and receives
- * core dumps as well as provides a client interface to inspect said
- * information. Its metadata storage is only accessible to superuser
- * in a raw manner.
+ * core dumps.
  *
  * The protocol for dump client:
  *
