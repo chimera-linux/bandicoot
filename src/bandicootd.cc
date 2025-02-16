@@ -39,6 +39,7 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/utsname.h>
 
 #include <zstd.h>
 
@@ -395,6 +396,27 @@ static bool handle_dump(conn &nc, int fd) {
 }
 
 int main() {
+    {
+        utsname ubuf;
+        if (uname(&ubuf)) {
+            err(1, "could not get uname");
+        }
+        char *str = ubuf.release;
+        char *err = nullptr;
+        auto maj = std::strtoul(str, &err, 10);
+        if ((maj < 5) || !err || (*err != '.')) {
+            errx(1, "kernels older than 5.x are not supported");
+        }
+        if (maj == 5) {
+            str = err + 1;
+            err = nullptr;
+            auto min = std::strtoul(str, &err, 10);
+            if (min < 3) {
+                errx(1, "kernels older than 5.3 are not supported");
+            }
+        }
+    }
+
     {
         struct sigaction sa{};
         sa.sa_handler = sig_handler;

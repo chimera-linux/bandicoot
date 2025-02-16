@@ -25,6 +25,9 @@ Additional dependencies required to build and run:
 
 * libzstd
 
+Kernel 5.3 or newer is required at runtime, due to older kernels having
+potentially broken argument splitting when there are spaces in the path.
+
 ## How it works
 
 The whole system consists of 3 processes:
