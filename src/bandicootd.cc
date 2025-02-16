@@ -40,6 +40,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/utsname.h>
+#include <sys/xattr.h>
 
 #include <zstd.h>
 
@@ -55,8 +56,6 @@ static int sigpipe[2] = {-1, -1};
 static int ctl_sock = -1;
 /* directory descriptor for /var/crash/bandicoot */
 static int crash_dfd = -1;
-/* file descriptor for crash_dfd/index.bin */
-static int crash_ifd = -1;
 /* number of threads to use for zstd */
 static int zstd_threads = 0;
 
@@ -150,16 +149,17 @@ struct zstream {
         return true;
     }
 
-    void release() {
+    int release() {
         if (outfd < 0) {
-            return;
+            return -1;
         }
-        close(outfd);
         ZSTD_freeCCtx(ctx);
         inbuf.clear();
         outbuf.clear();
-        outfd = -1;
         ctx = nullptr;
+        auto ret = outfd;
+        outfd = -1;
+        return ret;
     }
 };
 
@@ -178,19 +178,12 @@ struct conn {
     zstream zs;
 
     void finish() {
-        zs.release();
-        for (;;) {
-            auto ws = write(crash_ifd, meta.data(), meta.size());
-            if (ws < 0) {
-                if (errno == EINTR) {
-                    continue;
-                }
-                warn("failed to write index");
-            } else if (ws == 0) {
-                warnx("unexpected EOF for index");
-            }
-            break;
+        int fd = zs.release();
+        /* save whichever parameters we can as xattrs */
+        if (fsetxattr(fd, "user.bandicoot.meta", meta.data(), meta.size(), 0) < 0) {
+            warn("bandicootd: failed to set dump xattr for %d", fd);
         }
+        close(fd);
     }
 };
 
@@ -298,14 +291,6 @@ static bool handle_dump(conn &nc, int fd) {
         }
         /* the rest is the path */
         nc.path = nc.meta.data() + sizeof(nc.entry);
-        /* it's nodump; do not save */
-        if (nc.entry.flags & ENTRY_FLAG_NODUMP) {
-            return false;
-        }
-        /* disabled via resource limit */
-        if (nc.entry.dumpsize <= 0) {
-            return false;
-        }
         /* initialize zstd stream; first make up the file name */
         constexpr auto maxfn = 255;
         char buf[maxfn + 1];
@@ -328,6 +313,16 @@ static bool handle_dump(conn &nc, int fd) {
         }
         memcpy(eptr, ".zst", 5);
         if (!nc.zs.open(buf, nc.entry.uid, nc.entry.gid)) {
+            return false;
+        }
+        /* it's nodump; do not save */
+        if (nc.entry.flags & ENTRY_FLAG_NODUMP) {
+            nc.finish();
+            return false;
+        }
+        /* disabled via resource limit */
+        if (nc.entry.dumpsize <= 0) {
+            nc.finish();
             return false;
         }
     }
@@ -484,13 +479,6 @@ int main() {
     }
     /* don't need it anymore */
     close(crashdir);
-
-    /* the index write descriptor */
-    crash_ifd = openat(crash_dfd, "index.bin", O_CREAT | O_APPEND | O_WRONLY);
-    if (crash_ifd < 0) {
-        warn("failed to open '%s/bandicoot/index.bin'", CRASH_DIR);
-        return 1;
-    }
 
     std::printf("bandicootd: main loop\n");
 
@@ -657,7 +645,6 @@ do_compact:
         close(cnc.fd);
     }
     close(crash_dfd);
-    close(crash_ifd);
     std::printf("bandicootd: exit with %d\n", ret);
     /* intended return code */
     return ret;
