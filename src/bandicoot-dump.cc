@@ -115,10 +115,10 @@ int main(int argc, char **argv) {
     }
     uint16_t tdsz = tsize;
 
-    unsigned char pkt[8];
-    pkt[0] = 0xDD;
-    memcpy(&pkt[1], "DUMP", 5);
-    memcpy(&pkt[6], &tdsz, sizeof(tdsz));
+    unsigned char pkt[4];
+    pkt[0] = 0xD0;
+    pkt[1] = 0x0D;
+    memcpy(&pkt[2], &tdsz, sizeof(tdsz));
 
     if (connect(sock, reinterpret_cast<sockaddr const *>(&saddr), sizeof(saddr)) < 0) {
         err(1, "connect failed");

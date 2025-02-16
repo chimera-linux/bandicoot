@@ -5,7 +5,7 @@
  *
  * The protocol for dump client:
  *
- * - '\xDDDUMP\0'
+ * - '\xD0\x0D'
  * - 2 bytes containing metadata length (>0)
  * - metadata block as above (struct dumpidx followed by path)
  * - loop:
@@ -82,7 +82,7 @@ struct zstream {
             warn("bandicootd: failed to create zstd ctx");
             return false;
         }
-        outfd = openat(crash_dfd, fname, O_WRONLY | O_CREAT | O_TRUNC, 0700);
+        outfd = openat(crash_dfd, fname, O_WRONLY | O_CREAT | O_TRUNC, 0640);
         if (outfd < 0) {
             warn("bandicootd: failed to open dump file for writing");
             return false;
@@ -164,7 +164,7 @@ struct zstream {
 };
 
 struct conn {
-    char initial[8] = {};
+    char initial[4] = {};
     uint16_t metalen = 0;
     uint16_t metagot = 0;
     uint32_t datalen = 0;
@@ -434,7 +434,7 @@ int main() {
 
     /* control socket */
     {
-        if (!sock_new(SOCKET_PATH, ctl_sock, 0777)) {
+        if (!sock_new(SOCKET_PATH, ctl_sock, 0700)) {
             return 1;
         }
         auto &pfd = fds.emplace_back();
@@ -471,7 +471,7 @@ int main() {
         warn("failed to open '%s'", CRASH_DIR);
         return 1;
     }
-    mkdirat(crashdir, "bandicoot", 0700);
+    mkdirat(crashdir, "bandicoot", 0755);
     crash_dfd = openat(crashdir, "bandicoot", O_DIRECTORY | O_PATH);
     if (crash_dfd < 0) {
         warn("failed to open '%s/bandicoot", CRASH_DIR);
@@ -548,7 +548,7 @@ int main() {
                     nc->fd = fds[i].fd;
                 }
                 if (!nc->initial[0]) {
-                    /* ensure we read all 8 bytes */
+                    /* ensure we read all 4 bytes */
                     if (read(
                         fds[i].fd, nc->initial, sizeof(nc->initial)
                     ) != sizeof(nc->initial)) {
@@ -557,52 +557,25 @@ int main() {
                     }
                     /* ensure the message is good */
                     if (
-                        (static_cast<unsigned char>(nc->initial[0]) != 0xDD) ||
-                        nc->initial[sizeof(nc->initial) - 1]
+                        (static_cast<unsigned char>(nc->initial[0]) != 0xD0) ||
+                        (static_cast<unsigned char>(nc->initial[1]) != 0x0D)
                     ) {
                         warnx("bandicootd: invalid initial packet for %d", fds[i].fd);
                         goto bad_msg;
                     }
-                    if (!std::strncmp(&nc->initial[1], "DUMP", 4)) {
-                        /* only accept from root */
-                        struct ucred cr;
-                        socklen_t crl = sizeof(cr);
-                        if (getsockopt(
-                            fds[i].fd, SOL_SOCKET, SO_PEERCRED, &cr, &crl
-                        ) || (crl != sizeof(cr))) {
-                            warn("bandicootd: failed to get socket peer credentials");
-                            goto bad_msg;
-                        }
-                        if (cr.uid != 0) {
-                            /* silently kick the connection */
-                            goto bad_msg;
-                        }
-                        /* this is a dump message */
-                        std::memcpy(&nc->metalen, &nc->initial[6], sizeof(nc->metalen));
-                        if (nc->metalen < sizeof(dumpidx)) {
-                            warnx("bandicootd: wrong metadata length for %d", fds[i].fd);
-                            goto bad_msg;
-                        }
-                        /* we track this on our own... */
-                        nc->meta.resize(nc->metalen);
-                        nc->type = CONN_DUMP;
-                        /* move on... */
-                        continue;
+                    std::memcpy(&nc->metalen, &nc->initial[2], sizeof(nc->metalen));
+                    if (nc->metalen < sizeof(dumpidx)) {
+                        warnx("bandicootd: wrong metadata length for %d", fds[i].fd);
+                        goto bad_msg;
                     }
-                    warnx("bandicootd: invalid message for %d", fds[i].fd);
+                    /* we track this on our own... */
+                    nc->meta.resize(nc->metalen);
+                    continue;
+                }
+                if (!handle_dump(*nc, fds[i].fd)) {
                     goto bad_msg;
                 }
-                switch (nc->type) {
-                    case CONN_DUMP:
-                        if (!handle_dump(*nc, fds[i].fd)) {
-                            goto bad_msg;
-                        }
-                        continue;
-                    default:
-                        /* unreachable */
-                        abort();
-                        break;
-                };
+                continue;
 bad_msg:
                 if (nc) {
                     for (auto it = conns.begin(); it != conns.end(); ++it) {

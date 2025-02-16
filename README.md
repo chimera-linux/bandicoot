@@ -4,12 +4,8 @@ This is a distro-independent crash dump handler for Linux. It aims to be as
 simple as possible while providing a reasonable amount of control; it is
 specifically written to avoid depending on shell scripts.
 
-Core dumps are compressed with zstd and stored on the filesystem. A journal
-of metadata is stored alongside, which can be used to inspect metadata.
-
-Eventually, the system will be able to automatically prune core dumps in
-a configurable manner to keep a certain size, as well as provide various
-other limits and configuration. For now it does not do any of that.
+Core dumps are compressed with zstd and stored on the filesystem. All metadata
+about the core are attached in an extended attribute on the compressed file.
 
 **It is not ready to be used right now.**
 
@@ -32,18 +28,16 @@ potentially broken argument splitting when there are spaces in the path.
 
 The whole system consists of 3 processes:
 
-* `bandicootd`
-* `bandicoot-dump`
-* `bandicoot`
+* `bandicootd` - the server
+* `bandicoot-dump` - the client
+* `bandicoot` - the inspection tool
 
-The first is a daemon that runs as a system service. It opens a listening
-TCP socket and accepts connections. When a connection is received, it expects
-to receive a specific message.
+The server opens a listening socket where it expects to receive metadata
+about the dump plus the dump itself, and it compresses and stores the
+dump.
 
-* For connections from `bandicoot-dump`, an identification message plus metadata
-  is received, followed by a stream representing a core dump. This type of
-  message is only allowed from superuser connections (peer credentials are
-  verified).
-* For connections from `bandicoot`, a different protocol is followed. Any
-  user can send these messages but it will only receive information it has
-  permissions for.
+The client is expected to be used with the Linux kernel `core_pattern`
+`sysctl` entry.
+
+The inspection tool can read information about the core dumps as well as
+extract them.
