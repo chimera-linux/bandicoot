@@ -26,6 +26,8 @@
 #include <sys/stat.h>
 #include <sys/xattr.h>
 
+#include <zstd.h>
+
 extern char const *__progname;
 
 static void usage(FILE *f) {
@@ -220,6 +222,61 @@ static int do_dump(std::vector<dumpinfo> &dumps) {
         return 0;
     }
     auto &di = dumps[0];
+    auto inbufsz = ZSTD_DStreamInSize();
+    auto outbufsz = ZSTD_DStreamOutSize();
+    auto ctx = ZSTD_createDCtx();
+    if (!ctx) {
+        warn("could not create zstd decompression context");
+        return 1;
+    }
+    std::vector<char> inbuf;
+    std::vector<char> outbuf;
+    inbuf.reserve(inbufsz);
+    outbuf.reserve(outbufsz);
+    auto nread = inbufsz;
+    std::size_t lastret = 0;
+    for (;;) {
+        auto readn = read(di.fd, inbuf.data(), nread);
+        if (readn < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            warn("could not read from stream");
+            return 1;
+        } else if (readn == 0) {
+            /* eof */
+            break;
+        }
+        ZSTD_inBuffer inp = {inbuf.data(), std::size_t(readn), 0};
+        while (inp.pos < inp.size) {
+            ZSTD_outBuffer outp = {outbuf.data(), outbufsz, 0};
+            auto ret = ZSTD_decompressStream(ctx, &outp, &inp);
+            if (ZSTD_isError(ret)) {
+                warn("could not decompress stream");
+                return 1;
+            }
+            for (;;) {
+                auto wr = write(STDOUT_FILENO, outbuf.data(), outp.pos);
+                if (wr < 0) {
+                    if (errno == EINTR) {
+                        continue;
+                    }
+                    warn("could not write to stdout");
+                    return 1;
+                } else if (wr != ssize_t(outp.pos)) {
+                    warnx("output truncated");
+                    return 1;
+                }
+                break;
+            }
+            lastret = ret;
+        }
+    }
+    ZSTD_freeDCtx(ctx);
+    if (lastret != 0) {
+        warn("reached EOF before we could finish a zstd frame");
+        return 1;
+    }
     return 0;
 }
 

@@ -46,6 +46,7 @@ executable(
     include_directories: inc,
     install: true,
     install_dir: get_option('bindir'),
+    dependencies: [zstd],
 )
 
 cdata = configuration_data()
