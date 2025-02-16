@@ -147,7 +147,7 @@ static int do_list(std::vector<dumpinfo> &dumps) {
         std::memcpy(tbuf, meta.comm, sizeof(meta.comm));
         std::printf("%*s", widths[5] + 2, tbuf[0] ? tbuf : "-");
         auto *path = di.metastr.data() + sizeof(meta);
-        std::printf("  %s\n", path ? path : "-");
+        std::printf("  %s\n", *path ? path : "-");
     }
     return 0;
 }
@@ -156,6 +156,62 @@ static int do_info(std::vector<dumpinfo> &dumps) {
     if (dumps.empty()) {
         return 0;
     }
+    auto &di = dumps[0];
+    dumpidx meta;
+    std::memcpy(&meta, di.metastr.data(), sizeof(meta));
+    if (!meta.epoch) {
+        meta.epoch = di.st.st_mtime;
+    }
+    char tbuf[64];
+    auto ep = time_t(meta.epoch);
+    auto tinfo = localtime(&ep);
+    strftime(tbuf, sizeof(tbuf), "%c", tinfo);
+    std::printf(" Timestamp: %s\n", tbuf);
+    if (meta.pid) {
+        std::printf("       PID: %u", meta.pid);
+        if (meta.ipid && (meta.ipid != meta.pid)) {
+            std::printf(" (initial namespace: %u)", meta.ipid);
+        }
+        std::printf("\n");
+    }
+    if (meta.tid && (meta.tid != meta.pid)) {
+        std::printf("       TID: %u", meta.tid);
+        if (meta.itid && (meta.itid != meta.tid)) {
+            std::printf(" (initial namespace: %u)", meta.itid);
+        }
+        std::printf("\n");
+    }
+    if (meta.uid) {
+        std::printf("       UID: %u\n", meta.uid);
+    }
+    if (meta.gid) {
+        std::printf("       GID: %u\n", meta.uid);
+    }
+    if (meta.signum) {
+        std::printf("    Signal: %u\n", meta.signum);
+    }
+    if (*(di.metastr.data() + sizeof(meta))) {
+        std::printf("      Path: %s\n", di.metastr.data() + sizeof(meta));
+    }
+    std::memset(tbuf, 0, sizeof(meta.comm) + 1);
+    std::memcpy(tbuf, meta.comm, sizeof(meta.comm));
+    if (tbuf[0]) {
+        std::printf("Executable: %s\n", tbuf);
+    }
+    if (meta.dumpsize) {
+        std::printf("Core limit: %llu\n", static_cast<unsigned long long>(meta.dumpsize));
+    }
+    if (meta.flags) {
+        std::printf("     Flags:");
+        if (meta.flags & ENTRY_FLAG_NODUMP) {
+            std::printf(" nodump");
+        }
+        if (meta.flags & ENTRY_FLAG_TRUNCATED) {
+            std::printf(" truncated");
+        }
+        std::printf("\n");
+    }
+    std::printf(" Disk size: %llu\n", static_cast<unsigned long long>(di.st.st_size));
     return 0;
 }
 
@@ -163,6 +219,7 @@ static int do_dump(std::vector<dumpinfo> &dumps) {
     if (dumps.empty()) {
         return 0;
     }
+    auto &di = dumps[0];
     return 0;
 }
 
