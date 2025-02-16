@@ -296,6 +296,7 @@ static bool handle_dump(conn &nc, int fd) {
             buf, sizeof(buf), "core.%s.%u.%u", nc.entry.comm,
             unsigned(nc.entry.pid), unsigned(nc.entry.uid)
         );
+        std::printf("bandicootd: received dump data, saving to '%s'...\n", buf);
         auto flen = std::strlen(buf);
         auto plen = nc.path ? std::strlen(nc.path) : 0;
         auto *eptr = &buf[flen];
@@ -315,11 +316,18 @@ static bool handle_dump(conn &nc, int fd) {
         }
         /* it's nodump; do not save */
         if (nc.entry.flags & ENTRY_FLAG_NODUMP) {
+            std::printf(
+                "bandicootd: metadata-only dump for %u\n", unsigned(nc.entry.pid)
+            );
             nc.finish();
             return false;
         }
         /* disabled via resource limit */
         if (nc.entry.dumpsize <= 0) {
+            std::printf(
+                "bandicootd: dumps disabled via limit, saving only metadata for %u\n",
+                unsigned(nc.entry.pid)
+            );
             nc.finish();
             return false;
         }
@@ -347,6 +355,7 @@ static bool handle_dump(conn &nc, int fd) {
         }
         /* if it's 0, it means we have no more chunks */
         if (nc.datalen == 0) {
+            std::printf("bandicootd: finishing dump for pid %u\n", unsigned(nc.entry.pid));
             if (!nc.zs.write_from(fd, nc.datalen, nc.writelen, nc.entry.dumpsize)) {
                 nc.finish();
                 return false;
@@ -382,6 +391,7 @@ static bool handle_dump(conn &nc, int fd) {
     }
     /* ran out of space, so it's truncated */
     if (nc.writelen >= nc.entry.dumpsize) {
+        std::printf("bandicootd: truncating dump for pid %u\n", unsigned(nc.entry.pid));
         nc.entry.flags |= ENTRY_FLAG_TRUNCATED;
         return false;
     }
@@ -483,7 +493,6 @@ int main() {
     int ret = 0;
     for (;;) {
         std::size_t ni = 0;
-        std::printf("bandicootd: poll\n");
         auto pret = poll(fds.data(), fds.size(), -1);
         if (pret < 0) {
             if (errno == EINTR) {
@@ -568,6 +577,7 @@ int main() {
                     }
                     /* we track this on our own... */
                     nc->meta.resize(nc->metalen);
+                    std::printf("bandicootd: accept dump for %d\n", fds[i].fd);
                     continue;
                 }
                 if (!handle_dump(*nc, fds[i].fd)) {
@@ -592,7 +602,6 @@ do_compact:
         if (ret) {
             break;
         }
-        std::printf("bandicootd: loop compact\n");
         for (auto it = fds.begin(); it != fds.end();) {
             if (it->fd == -1) {
                 it = fds.erase(it);
