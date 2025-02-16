@@ -48,21 +48,32 @@ executable(
     install_dir: get_option('bindir'),
 )
 
+cdata = configuration_data()
+
+clpath = get_option('prefix') / get_option('libexecdir') / 'bandicoot-dump'
+cdata.set('BANDICOOT_CLIENT', clpath)
+cdata.set('CRASHDIR', crashdir)
+
+configure_file(
+    input: 'data/tmpfiles.conf.in',
+    output: 'bandicoot.conf',
+    configuration: cdata,
+    format: 'cmake@',
+    install: true,
+    install_dir: get_option('libdir') / 'tmpfiles.d',
+    install_mode: 'rw-r--r--',
+)
+
 sysname = get_option('sysctl-name')
 
 if sysname != ''
-    syscdata = configuration_data()
-
-    clpath = get_option('prefix') / get_option('libexecdir') / 'bandicoot-dump'
-    syscdata.set('BANDICOOT_CLIENT', clpath)
-
     configure_file(
         input: 'data/sysctl.conf.in',
         output: sysname,
-        configuration: syscdata,
+        configuration: cdata,
         format: 'cmake@',
         install: true,
         install_dir: get_option('libdir') / 'sysctl.d',
-        install_mode: 'rwxr-xr-x',
+        install_mode: 'rw-r--r--',
     )
 endif

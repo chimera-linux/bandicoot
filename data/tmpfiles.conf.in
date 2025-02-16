@@ -1,0 +1,4 @@
+# Prune core dumps
+
+d @CRASHDIR@ 0755 root root - -
+d @CRASHDIR@/bandicoot 0755 root root 3d -

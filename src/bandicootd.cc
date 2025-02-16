@@ -376,7 +376,7 @@ static bool handle_dump(conn &nc, int fd) {
             return false;
         }
     }
-    /* reading a dump; XXX truncate when going over ulimit? */
+    /* reading a dump */
     auto ret = nc.zs.write_from(fd, nc.datalen, nc.writelen, nc.entry.dumpsize);
     /* exhausted the chunk, reset to get a new chunk */
     if (nc.datalen == 0) {
