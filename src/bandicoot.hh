@@ -25,13 +25,15 @@ enum {
 
 struct dumpidx {
     uint32_t version = ENTRY_V1;
-    pid_t pid = 0, ipid = 0, tid = 0, itid = 0;
-    uid_t uid = uid_t(-1);
-    gid_t gid = gid_t(-1);
-    rlim_t dumpsize = 0;
-    int signum = 0;
-    unsigned int pathlen = 0;
-    time_t epoch = 0;
-    int flags = 0;
+    uint32_t pid = 0, ipid = 0;
+    uint32_t tid = 0, itid = 0;
+    uint32_t uid = 0, gid = 0;
+    uint32_t signum = 0;
+    uint64_t dumpsize = 0;
+    uint64_t epoch = 0;
+    uint32_t pathlen = 0;
+    uint32_t flags = 0;
     char comm[16];
 };
+
+static_assert(sizeof(dumpidx) == 72, "struct dumpidx has a bad size");
