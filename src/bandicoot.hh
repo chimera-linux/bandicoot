@@ -7,6 +7,7 @@
 
 #include "config.hh"
 
+#include <cstdint>
 #include <ctime>
 
 #include <sys/resource.h>
