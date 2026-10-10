@@ -506,7 +506,7 @@ int main(int argc, char **argv) {
     std::sort(dumps.begin(), dumps.end(), [](
         dumpinfo const &a, dumpinfo const &b
     ) {
-        return (a.st.st_mtime >= b.st.st_mtime);
+        return (a.st.st_mtime > b.st.st_mtime);
     });
 
     if (!std::strcmp(cmd, "list")) {
