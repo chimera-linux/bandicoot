@@ -28,6 +28,7 @@
 #include <cstdint>
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <err.h>
@@ -60,13 +61,34 @@ static int crash_dfd = -1;
 static int zstd_threads = 0;
 
 struct zstream {
-    databuf inbuf;
-    databuf outbuf;
+    databuf inbuf{};
+    databuf outbuf{};
     ZSTD_CCtx *ctx = nullptr;
     int outfd = -1;
 
+    zstream() {}
+
     ~zstream() {
         release();
+    }
+
+    zstream(zstream &&s) {
+        swap(s);
+    }
+
+    zstream &operator=(zstream &&s) {
+        swap(s);
+        return *this;
+    }
+
+    zstream(zstream const &) = delete;
+    zstream &operator=(zstream const &) = delete;
+
+    void swap(zstream &s) {
+        std::swap(ctx, s.ctx);
+        std::swap(outfd, s.outfd);
+        inbuf.swap(s.inbuf);
+        outbuf.swap(s.outbuf);
     }
 
     bool open(char const *fname, uid_t uid, gid_t gid) {
@@ -173,9 +195,44 @@ struct conn {
     int fd = -1;
     std::size_t writelen = 0;
     char const *path = nullptr;
-    std::string meta;
-    dumpidx entry;
-    zstream zs;
+    std::string meta{};
+    dumpidx entry{};
+    zstream zs{};
+
+    conn() {}
+
+    conn(conn &&c) {
+        swap(c);
+    }
+
+    conn &operator=(conn &&c) {
+        swap(c);
+        return *this;
+    }
+
+    conn(conn const &) = delete;
+    conn &operator=(conn const &) = delete;
+
+    void swap(conn &c) {
+        char init[4];
+        /* array swap */
+        std::memcpy(init, c.initial, sizeof(init));
+        std::memcpy(c.initial, initial, sizeof(c.initial));
+        std::memcpy(initial, init, sizeof(initial));
+        /* plain fields */
+        std::swap(metalen, c.metalen);
+        std::swap(metagot, c.metagot);
+        std::swap(datalen, c.datalen);
+        std::swap(datagot, c.datagot);
+        std::swap(type, c.type);
+        std::swap(fd, c.fd);
+        std::swap(writelen, c.writelen);
+        std::swap(path, c.path);
+        /* struct swap */
+        entry.swap(c.entry);
+        meta.swap(c.meta);
+        zs.swap(c.zs);
+    }
 
     void finish() {
         int fd = zs.release();

@@ -36,7 +36,13 @@ struct dumpidx {
     uint64_t epoch = 0;
     uint32_t pathlen = 0;
     uint32_t flags = 0;
-    char comm[16];
+    char comm[16] = {};
+
+    void swap(dumpidx &dx) {
+        dumpidx tmp = *this;
+        *this = dx;
+        dx = tmp;
+    }
 };
 
 struct databuf {
@@ -45,10 +51,31 @@ struct databuf {
         clear();
     }
 
+    databuf(databuf &&d) {
+        swap(d);
+    }
+
+    databuf &operator=(databuf &&d) {
+        swap(d);
+        return *this;
+    }
+
+    databuf(databuf const &) = delete;
+    databuf &operator=(databuf const &) = delete;
+
     void clear() {
         std::free(buf);
         buf = nullptr;
         cap = 0;
+    }
+
+    void swap(databuf &d) {
+        auto *bufv = buf;
+        auto capv = cap;
+        buf = d.buf;
+        cap = d.cap;
+        d.buf = bufv;
+        d.cap = capv;
     }
 
     bool reserve(std::size_t n) {
