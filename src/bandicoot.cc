@@ -222,21 +222,21 @@ static int do_dump(std::vector<dumpinfo> &dumps) {
         return 0;
     }
     auto &di = dumps[0];
-    auto inbufsz = ZSTD_DStreamInSize();
-    auto outbufsz = ZSTD_DStreamOutSize();
     auto ctx = ZSTD_createDCtx();
     if (!ctx) {
         warn("could not create zstd decompression context");
         return 1;
     }
-    std::vector<char> inbuf;
-    std::vector<char> outbuf;
-    inbuf.reserve(inbufsz);
-    outbuf.reserve(outbufsz);
-    auto nread = inbufsz;
+    databuf inbuf;
+    databuf outbuf;
+    if (!inbuf.reserve(ZSTD_DStreamInSize()) || !outbuf.reserve(ZSTD_DStreamOutSize())) {
+        warn("out of memory");
+        return 1;
+    }
+    auto nread = inbuf.cap;
     std::size_t lastret = 0;
     for (;;) {
-        auto readn = read(di.fd, inbuf.data(), nread);
+        auto readn = read(di.fd, inbuf.buf, nread);
         if (readn < 0) {
             if (errno == EINTR) {
                 continue;
@@ -247,16 +247,16 @@ static int do_dump(std::vector<dumpinfo> &dumps) {
             /* eof */
             break;
         }
-        ZSTD_inBuffer inp = {inbuf.data(), std::size_t(readn), 0};
+        ZSTD_inBuffer inp = {inbuf.buf, std::size_t(readn), 0};
         while (inp.pos < inp.size) {
-            ZSTD_outBuffer outp = {outbuf.data(), outbufsz, 0};
+            ZSTD_outBuffer outp = {outbuf.buf, outbuf.cap, 0};
             auto ret = ZSTD_decompressStream(ctx, &outp, &inp);
             if (ZSTD_isError(ret)) {
                 warn("could not decompress stream");
                 return 1;
             }
             for (;;) {
-                auto wr = write(STDOUT_FILENO, outbuf.data(), outp.pos);
+                auto wr = write(STDOUT_FILENO, outbuf.buf, outp.pos);
                 if (wr < 0) {
                     if (errno == EINTR) {
                         continue;

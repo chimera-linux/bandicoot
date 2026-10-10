@@ -60,10 +60,8 @@ static int crash_dfd = -1;
 static int zstd_threads = 0;
 
 struct zstream {
-    std::vector<unsigned char> inbuf;
-    std::vector<unsigned char> outbuf;
-    std::size_t inbufsz;
-    std::size_t outbufsz;
+    databuf inbuf;
+    databuf outbuf;
     ZSTD_CCtx *ctx = nullptr;
     int outfd = -1;
 
@@ -73,10 +71,10 @@ struct zstream {
 
     bool open(char const *fname, uid_t uid, gid_t gid) {
         /* initialize compbuffer */
-        outbufsz = ZSTD_CStreamOutSize();
-        outbuf.reserve(outbufsz);
-        inbufsz = ZSTD_CStreamInSize();
-        inbuf.reserve(inbufsz);
+        if (!outbuf.reserve(ZSTD_CStreamOutSize()) || !inbuf.reserve(ZSTD_CStreamInSize())) {
+            warn("bandicootd: out of memory");
+            return false;
+        }
         ctx = ZSTD_createCCtx();
         if (!ctx) {
             warn("bandicootd: failed to create zstd ctx");
@@ -111,9 +109,9 @@ struct zstream {
     }
 
     bool write_from(int fd, uint32_t &datalen, std::size_t &writelen, rlim_t limit) {
-        void *ptr = inbuf.data();
+        void *ptr = inbuf.buf;
         auto space = (writelen < limit) ? (limit - writelen) : 0;
-        auto maxread = (inbufsz > datalen) ? std::size_t(datalen) : inbufsz;
+        auto maxread = (inbuf.cap > datalen) ? std::size_t(datalen) : inbuf.cap;
         if (maxread > space) {
             maxread = space;
         }
@@ -132,7 +130,7 @@ struct zstream {
         ZSTD_inBuffer inp{ptr, std::size_t(wsize), 0};
         std::size_t rem;
         do {
-            ZSTD_outBuffer outp{outbuf.data(), outbufsz, 0};
+            ZSTD_outBuffer outp{outbuf.buf, outbuf.cap, 0};
             rem = ZSTD_compressStream2(
                 ctx, &outp, &inp, wsize ? ZSTD_e_continue : ZSTD_e_end
             );
@@ -140,7 +138,7 @@ struct zstream {
                 return false;
             }
             if (outp.pos != 0) {
-                auto ret = write(outfd, outbuf.data(), outp.pos);
+                auto ret = write(outfd, outbuf.buf, outp.pos);
                 if (ret < 0) {
                     return false;
                 }

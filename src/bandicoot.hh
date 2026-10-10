@@ -7,6 +7,8 @@
 
 #include "config.hh"
 
+#include <cstdlib>
+#include <cstring>
 #include <cstdint>
 #include <ctime>
 
@@ -35,6 +37,32 @@ struct dumpidx {
     uint32_t pathlen = 0;
     uint32_t flags = 0;
     char comm[16];
+};
+
+struct databuf {
+    databuf() {}
+    ~databuf() {
+        clear();
+    }
+
+    void clear() {
+        std::free(buf);
+        buf = nullptr;
+        cap = 0;
+    }
+
+    bool reserve(std::size_t n) {
+        void *newp = std::realloc(buf, n);
+        if (!newp) {
+            return false;
+        }
+        buf = static_cast<char *>(newp);
+        cap = n;
+        return true;
+    }
+
+    char *buf = nullptr;
+    std::size_t cap = 0;
 };
 
 static_assert(sizeof(dumpidx) == 72, "struct dumpidx has a bad size");
