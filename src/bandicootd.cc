@@ -151,10 +151,12 @@ struct zstream {
         if (outfd < 0) {
             return -1;
         }
-        ZSTD_freeCCtx(ctx);
+        if (ctx) {
+            ZSTD_freeCCtx(ctx);
+            ctx = nullptr;
+        }
         inbuf.clear();
         outbuf.clear();
-        ctx = nullptr;
         auto ret = outfd;
         outfd = -1;
         return ret;
